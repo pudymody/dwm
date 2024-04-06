@@ -114,6 +114,13 @@ typedef struct {
 } Layout;
 
 typedef struct Pertag Pertag;
+typedef struct {
+	int x;
+	int y;
+	int w;
+	int h;
+} Inset;
+
 struct Monitor {
 	char ltsymbol[16];
 	float mfact;
@@ -135,6 +142,7 @@ struct Monitor {
 	Window barwin;
 	const Layout *lt[2];
 	Pertag *pertag;
+	Inset inset;
 };
 
 typedef struct {
@@ -225,6 +233,8 @@ static void setdesktopnames(void);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
 static void layoutscroll(const Arg *arg);
+static void setinset(Monitor *m, Inset inset);
+static void updateinset(const Arg *arg);
 static void setlayout(const Arg *arg);
 static void setmfact(const Arg *arg);
 static void setnumdesktops(void);
@@ -713,6 +723,7 @@ createmon(void)
 		m->pertag->showbars[i] = m->showbar;
 	}
 
+	m->inset = default_inset;
 	return m;
 }
 
@@ -1650,7 +1661,23 @@ layoutscroll(const Arg *arg)
 	selmon->pertag->ltcur[selmon->pertag->curtag] = switchto;
 	Arg arg2 = {.v= &layouts[switchto] };
 	setlayout(&arg2);
+}
 
+void
+setinset(Monitor *m, Inset inset)
+{
+	m->inset = inset;
+	updatebarpos(m);
+	arrange(m);
+}
+
+void
+updateinset(const Arg *arg)
+{
+	Inset *inset = (Inset *)arg->v;
+
+	for (Monitor *m = mons; m; m = m->next)
+		setinset(m, *inset);
 }
 
 void
@@ -2061,6 +2088,13 @@ updatebarpos(Monitor *m)
 		m->wy = m->topbar ? m->wy + bh : m->wy;
 	} else
 		m->by = -bh;
+
+	// Custom insets
+	Inset inset = m->inset;
+	m->wx += inset.x;
+	m->wy += inset.y;
+	m->ww -= inset.w + inset.x;
+	m->wh -= inset.h + inset.y;
 }
 
 void

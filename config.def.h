@@ -4,7 +4,7 @@
 static unsigned int borderpx  = 1;        /* border pixel of windows */
 static unsigned int gappx     = 5;        /* gaps between windows */
 static const unsigned int snap      = 32;       /* snap pixel */
-static const int showbar            = 1;        /* 0 means no bar */
+static const int showbar            = 0;        /* 0 means no bar */
 static const int topbar             = 1;        /* 0 means bottom bar */
 static char font[]            = "monospace:size=10";
 static const char *fonts[]          = { font };
@@ -19,6 +19,13 @@ static char *colors[][3] = {
 		 /*               fg           bg           border   */
 		 [SchemeNorm] = { normfgcolor, normbgcolor, normbordercolor },
 		 [SchemeSel]  = { selfgcolor,  selbgcolor,  selbordercolor  },
+};
+
+static Inset default_inset = {
+	.x = 0,
+	.y = 0,
+	.w = 0,
+	.h = 0,
 };
 
 /* tagging */
@@ -77,6 +84,7 @@ ResourcePref resources[] = {
 		{ "selfgcolor",         STRING,  &selfgcolor },
 		{ "borderpx",          	INTEGER, &borderpx },
 		{ "gappx",          	INTEGER, &gappx },
+		{ "insetY",          	INTEGER, &default_inset.y },
 };
 
 static Key keys[] = {
