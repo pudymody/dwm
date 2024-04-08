@@ -580,6 +580,13 @@ clientmessage(XEvent *e)
 	XClientMessageEvent *cme = &e->xclient;
 	Client *c = wintoclient(cme->window);
 
+
+	if( cme->message_type == netatom[NetCurrentDesktop]){
+		Arg a = {.ui = 1 << cme->data.l[0]};
+		view(&a);
+		return;
+	}
+
 	if (!c)
 		return;
 	if (cme->message_type == netatom[NetWMState]) {
