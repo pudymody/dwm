@@ -3,6 +3,7 @@
 /* appearance */
 static unsigned int borderpx  = 1;        /* border pixel of windows */
 static unsigned int gappx     = 5;        /* gaps between windows */
+static unsigned int smartgaps     = 1;        /* smartgaps=1 dont show gaps when only one window */
 static const unsigned int snap      = 32;       /* snap pixel */
 static const int showbar            = 0;        /* 0 means no bar */
 static const int topbar             = 1;        /* 0 means bottom bar */
@@ -84,7 +85,11 @@ ResourcePref resources[] = {
 		{ "selfgcolor",         STRING,  &selfgcolor },
 		{ "borderpx",          	INTEGER, &borderpx },
 		{ "gappx",          	INTEGER, &gappx },
+		{ "smartgaps",          	INTEGER, &smartgaps },
 		{ "insetY",          	INTEGER, &default_inset.y },
+		{ "insetX",          	INTEGER, &default_inset.x },
+		{ "insetW",          	INTEGER, &default_inset.w },
+		{ "insetH",          	INTEGER, &default_inset.h },
 };
 
 static Key keys[] = {
