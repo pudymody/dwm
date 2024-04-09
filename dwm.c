@@ -582,8 +582,10 @@ clientmessage(XEvent *e)
 	Client *c = wintoclient(cme->window);
 
 
+	// TODO: Handle focus monitor if not in current 
 	if( cme->message_type == netatom[NetCurrentDesktop]){
-		Arg a = {.ui = 1 << cme->data.l[0]};
+		unsigned int tag = cme->data.l[0] % TAGSLENGTH;
+		Arg a = {.ui = 1 << tag};
 		view(&a);
 		return;
 	}
@@ -1563,6 +1565,7 @@ sendmon(Client *c, Monitor *m)
 	attachstack(c);
 	focus(NULL);
 	arrange(NULL);
+	setclientdesktop(c);
 }
 
 void setclientdesktop(Client *c){
@@ -1571,6 +1574,8 @@ void setclientdesktop(Client *c){
 	while(*rawdata >> i+1){
 		i++;
 	}
+
+	i += c->mon->num * TAGSLENGTH;
 	long data[] = { i };
 	XChangeProperty(dpy, c->win, netatom[NetWindowDesktop], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 1);
 }
@@ -1589,8 +1594,22 @@ setcurrentdesktop(void){
 	XChangeProperty(dpy, root, netatom[NetCurrentDesktop], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 1);
 }
 void setdesktopnames(void){
+
+	Monitor *m;
+	int total = 0;
+	for (m = mons; m; m = m->next){
+		total++;
+	}
+
+	char *tagsTotal[total*TAGSLENGTH];
+	for(int i = 0; i < total; i++){
+		for(int j = 0; j < TAGSLENGTH; j++){
+			tagsTotal[i*TAGSLENGTH + j] = tags[j];
+		}
+	}
+
 	XTextProperty text;
-	Xutf8TextListToTextProperty(dpy, tags, TAGSLENGTH, XUTF8StringStyle, &text);
+	Xutf8TextListToTextProperty(dpy, tagsTotal, total*TAGSLENGTH, XUTF8StringStyle, &text);
 	XSetTextProperty(dpy, root, &text, netatom[NetDesktopNames]);
 }
 
@@ -1621,7 +1640,13 @@ sendevent(Client *c, Atom proto)
 
 void
 setnumdesktops(void){
-	long data[] = { TAGSLENGTH };
+	Monitor *m;
+	int total = 0;
+	for (m = mons; m; m = m->next){
+		total++;
+	}
+
+	long data[] = { TAGSLENGTH*total };
 	XChangeProperty(dpy, root, netatom[NetNumberOfDesktops], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 1);
 }
 
@@ -1757,7 +1782,6 @@ setup(void)
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
 	bh = drw->fonts->h + 2;
-	updategeom();
 	/* init atoms */
 	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
 	wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);
@@ -1782,6 +1806,7 @@ setup(void)
 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
 	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
 	cursor[CurMove] = drw_cur_create(drw, XC_fleur);
+	updategeom();
 	/* init appearance */
 	scheme = ecalloc(LENGTH(colors), sizeof(Clr *));
 	for (i = 0; i < LENGTH(colors); i++)
@@ -1800,10 +1825,7 @@ setup(void)
 	/* EWMH support per view */
 	XChangeProperty(dpy, root, netatom[NetSupported], XA_ATOM, 32,
 		PropModeReplace, (unsigned char *) netatom, NetLast);
-	setnumdesktops();
 	setcurrentdesktop();
-	setdesktopnames();
-	setviewport();
 	XDeleteProperty(dpy, root, netatom[NetClientList]);
 	/* select events */
 	wa.cursor = cursor[CurNormal]->cursor;
@@ -1817,8 +1839,26 @@ setup(void)
 }
 void
 setviewport(void){
-	long data[] = { 0, 0 };
-	XChangeProperty(dpy, root, netatom[NetDesktopViewport], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 2);
+	Monitor *m;
+	int monitorCount = 0;
+	for (m = mons; m; m = m->next){
+		monitorCount++;
+	}
+	int length = monitorCount*TAGSLENGTH*2;
+	long data[ length ];
+
+	int offset = 0;
+	int i = 0;
+	for (m = mons; m; m = m->next){
+		for(int j = 0; j < TAGSLENGTH; j++){
+			data[ i*TAGSLENGTH*2 + 2*j ] = offset;
+			data[ i*TAGSLENGTH*2 + 2*j + 1 ] = 0;
+		}
+		offset += m->mw;
+		i++;
+	}
+
+	XChangeProperty(dpy, root, netatom[NetDesktopViewport], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, length);
 }
 
 void
@@ -2149,6 +2189,8 @@ void updatecurrentdesktop(void){
 	while(*rawdata >> i+1){
 		i++;
 	}
+
+	i += selmon->num * TAGSLENGTH;
 	long data[] = { i };
 	XChangeProperty(dpy, root, netatom[NetCurrentDesktop], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 1);
 }
@@ -2206,6 +2248,7 @@ updategeom(void)
 				c->mon = mons;
 				attachbottom(c);
 				attachstack(c);
+				setclientdesktop(c);
 			}
 			if (m == selmon)
 				selmon = mons;
@@ -2228,6 +2271,10 @@ updategeom(void)
 		selmon = mons;
 		selmon = wintomon(root);
 	}
+	setdesktopnames();
+	setnumdesktops();
+	setviewport();
+	updatecurrentdesktop();
 	return dirty;
 }
 
