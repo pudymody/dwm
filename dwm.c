@@ -64,7 +64,7 @@ enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
 enum { SchemeNorm, SchemeSel }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
-       NetWMWindowTypeDialog, NetClientList, NetDesktopNames, NetDesktopViewport, NetNumberOfDesktops, NetCurrentDesktop, NetWindowDesktop, NetLast }; /* EWMH atoms */
+       NetWMWindowTypeDialog, NetClientList, NetDesktopNames, NetDesktopViewport, NetNumberOfDesktops, NetCurrentDesktop, NetWindowDesktop, NetCurrentLayout, NetLast }; /* EWMH atoms */
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
@@ -1707,6 +1707,9 @@ layoutscroll(const Arg *arg)
 	selmon->pertag->ltcur[selmon->pertag->curtag] = switchto;
 	Arg arg2 = {.v= &layouts[switchto] };
 	setlayout(&arg2);
+
+	long data[] = { switchto };
+	XChangeProperty(dpy, root, netatom[NetCurrentLayout], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 1);
 }
 
 void
@@ -1801,6 +1804,7 @@ setup(void)
 	netatom[NetDesktopViewport] = XInternAtom(dpy, "_NET_DESKTOP_VIEWPORT", False);
 	netatom[NetNumberOfDesktops] = XInternAtom(dpy, "_NET_NUMBER_OF_DESKTOPS", False);
 	netatom[NetCurrentDesktop] = XInternAtom(dpy, "_NET_CURRENT_DESKTOP", False);
+	netatom[NetCurrentLayout] = XInternAtom(dpy, "_DWM_LAYOUT", False);
 	netatom[NetDesktopNames] = XInternAtom(dpy, "_NET_DESKTOP_NAMES", False);
 	/* init cursors */
 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
@@ -2193,6 +2197,9 @@ void updatecurrentdesktop(void){
 	i += selmon->num * TAGSLENGTH;
 	long data[] = { i };
 	XChangeProperty(dpy, root, netatom[NetCurrentDesktop], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 1);
+
+	long currLayout[] = { selmon->pertag->ltcur[selmon->pertag->curtag] };
+	XChangeProperty(dpy, root, netatom[NetCurrentLayout], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)currLayout, 1);
 }
 
 int
