@@ -21,6 +21,7 @@
  * To understand everything else, start reading main().
  */
 #include <errno.h>
+#include <fcntl.h>
 #include <locale.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -28,6 +29,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <poll.h>
+#include <fnmatch.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <X11/cursorfont.h>
@@ -161,6 +164,13 @@ typedef struct {
 	void *dst;
 } ResourcePref;
 
+typedef struct {
+	const char *name;
+	void (*func)(const Arg *arg);
+	const Arg arg;
+	int (*parse)(Arg *arg, const char *s, size_t len);
+} Command;
+
 /* function declarations */
 static void applyrules(Client *c);
 static int applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
@@ -182,6 +192,7 @@ static void destroynotify(XEvent *e);
 static void detach(Client *c);
 static void detachstack(Client *c);
 static Monitor *dirtomon(int dir);
+static void dispatchcmd(void);
 static void enternotify(XEvent *e);
 static void expose(XEvent *e);
 static void focus(Client *c);
@@ -296,6 +307,11 @@ static Display *dpy;
 static Drw *drw;
 static Monitor *mons, *selmon;
 static Window root, wmcheckwin;
+static int fifofd;
+
+static int parsetag(Arg *a, const char *s, size_t len);
+static int parseplusminus(Arg *a, const char *s, size_t len);
+static int parseplusminusfloat(Arg *a, const char *s, size_t len);
 
 /* configuration, allows nested code to access above variables */
 #include "config.h"
@@ -308,6 +324,44 @@ struct Pertag {
 	unsigned int ltcur[LENGTH(tags) + 1]; /* selected layouts */
 	const Layout *ltidxs[LENGTH(tags) + 1][2]; /* matrix of tags and layouts indexes  */
 };
+
+static int parsetag(Arg *a, const char *s, size_t len)
+{
+	char *end;
+	unsigned int rv = strtoul(s, &end, 10);
+	if (end == s)
+		a->ui = 0;
+	else if (rv > LENGTH(tags))
+		return 0;
+	else if (rv == 0)
+		a->ui = ~0U;
+	else
+		a->ui = 1U << (rv - 1);
+
+	return 1;
+}
+
+static int parseplusminus(Arg *a, const char *s, size_t len)
+{
+	if (*s == '+')
+		a->i = +1;
+	else if (*s == '-')
+		a->i = -1;
+	else
+		return 0;
+	return 1;
+}
+
+static int parseplusminusfloat(Arg *a, const char *s, size_t len)
+{
+	if (*s == '+')
+		a->f = +0.05;
+	else if (*s == '-')
+		a->f = -0.05;
+	else
+		return 0;
+	return 1;
+}
 
 /* compile-time check if all tags fit into an unsigned int bit array. */
 struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
@@ -523,6 +577,7 @@ cleanup(void)
 	XSync(dpy, False);
 	XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
 	XDeleteProperty(dpy, root, netatom[NetActiveWindow]);
+	close(fifofd);
 }
 
 void
@@ -741,6 +796,71 @@ dirtomon(int dir)
 	else
 		for (m = mons; m->next != selmon; m = m->next);
 	return m;
+}
+
+static const char *
+strnprefix(const char *haystack, size_t hlen, const char *needle)
+{
+	while (*needle && hlen--) {
+		if (*haystack++ != *needle++)
+			return 0;
+	}
+
+	if (*needle)
+		return NULL;
+	return haystack;
+}
+
+void
+dispatchcmd(void)
+{
+	static char buf[BUFSIZ];
+	static char * const bend = 1[&buf];
+	static char *bw = buf;
+	static int longline = 0;
+	ssize_t n;
+	char *nl;
+	char *pl = buf;
+	char *dend;
+	Command *i;
+
+	n = read(fifofd, bw, bend - bw);
+	if (n == -1)
+		die("Failed to read() from DWM fifo %s:", dwmfifo);
+	dend = bw + n;
+
+	if (longline) {
+		if (!(nl = memchr(bw, '\n', dend - bw)))
+			return;
+		bw = pl = nl + 1;
+		longline = 0;
+	}
+
+	while ((nl = memchr(bw, '\n', dend - bw))) {
+		for (i = commands; i < 1[&commands]; i++) {
+			const char *arg;
+
+			if (!(arg = strnprefix(pl, nl - pl, i->name)))
+				continue;
+			*nl = '\0';
+			if (i->parse) {
+				Arg a;
+				if (i->parse(&a, arg, nl - arg))
+					i->func(&a);
+			} else {
+				i->func(&i->arg);
+			}
+
+			break;
+		}
+		bw = pl = nl + 1;
+	}
+
+	memmove(buf, pl, dend - pl);
+	bw = dend - pl + buf;
+
+	if (bw == bend)
+		bw = buf;
 }
 
 void
@@ -1397,15 +1517,33 @@ restack(Monitor *m)
 	while (XCheckMaskEvent(dpy, EnterWindowMask, &ev));
 }
 
+static Bool evpredicate()
+{
+	return True;
+}
+
 void
 run(void)
 {
 	XEvent ev;
+	struct pollfd fds[2] = {
+		{ .events = POLLIN },
+		{ .fd = fifofd, .events = POLLIN }
+	};
 	/* main event loop */
 	XSync(dpy, False);
-	while (running && !XNextEvent(dpy, &ev))
-		if (handler[ev.type])
-			handler[ev.type](&ev); /* call handler */
+	fds[0].fd = ConnectionNumber(dpy);
+	while (running) {
+		// It seems that XCheckIfEvent doesnt flush queue as XNextEvent did
+		XFlush(dpy);
+		(void)poll(fds, 1[&fds] - fds, -1);
+		if (fds[0].revents & POLLIN)
+			while (XCheckIfEvent(dpy, &ev, evpredicate, NULL))
+				if (handler[ev.type])
+					handler[ev.type](&ev); /* call handler */
+		if (fds[1].revents & POLLIN)
+			dispatchcmd();
+	}
 }
 
 void
@@ -1715,6 +1853,9 @@ setup(void)
 	XSelectInput(dpy, root, wa.event_mask);
 	grabkeys();
 	focus(NULL);
+	fifofd = open(dwmfifo, O_RDWR | O_CLOEXEC | O_NONBLOCK);
+	if (fifofd < 0)
+		die("Failed to open() DWM fifo %s:", dwmfifo);
 }
 void
 setviewport(void){
