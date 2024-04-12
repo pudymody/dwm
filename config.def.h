@@ -124,6 +124,7 @@ static const Button buttons[] = {
 	{ ClkClientWin,         MODKEY,         Button3,        resizemouse,    {0} },
 };
 
+static const char *dwmfifo = "/tmp/dwm.fifo";
 static Command commands[] = {
 	{ "focusstack",      focusstack,     .parse = parseplusminus },
 	{ "incnmaster",      incnmaster,     .parse = parseplusminus },
