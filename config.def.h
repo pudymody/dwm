@@ -74,10 +74,6 @@ ResourcePref resources[] = {
 		{ "borderpx",          	INTEGER, &borderpx },
 		{ "gappx",          	INTEGER, &gappx },
 		{ "smartgaps",          	INTEGER, &smartgaps },
-		{ "insetY",          	INTEGER, &default_inset.y },
-		{ "insetX",          	INTEGER, &default_inset.x },
-		{ "insetW",          	INTEGER, &default_inset.w },
-		{ "insetH",          	INTEGER, &default_inset.h },
 };
 
 static Key keys[] = {
@@ -126,20 +122,20 @@ static const Button buttons[] = {
 
 static const char *dwmfifo = "/tmp/dwm.fifo";
 static Command commands[] = {
-	{ "focusstack",      focusstack,     .parse = parseplusminus },
-	{ "incnmaster",      incnmaster,     .parse = parseplusminus },
-	{ "setmfact",        setmfact,       .parse = parseplusminusfloat },
-	{ "zoom",            zoom,           {0} },
-	{ "killclient",      killclient,     {0} },
-	{ "togglefloating",  togglefloating, {0} },
-	{ "layoutscroll",        layoutscroll,       .parse = parseplusminus },
-	{ "focusmon",        focusmon,       .parse = parseplusminus },
-	{ "tagmon",          tagmon,         .parse = parseplusminus },
-	{ "pushdown",            pushdown,           {0} },
-	{ "pushup",            pushup,           {0} },
-	{ "view",            view,           .parse = parsetag },
-	{ "toggleview",      toggleview,     .parse = parsetag },
-	{ "tag",             tag,            .parse = parsetag },
-	{ "toggletag",       toggletag,      .parse = parsetag },
-	{ "quit",            quit,           {0} },
+	{ "focusstack",      focusstack,         .parse = parseplusminus },
+	{ "incnmaster",      incnmaster,         .parse = parseplusminus },
+	{ "setmfact",        setmfact,           .parse = parseplusminusfloat },
+	{ "zoom",            zoom,               {0} },
+	{ "killclient",      killclient,         {0} },
+	{ "togglefloating",  togglefloating,     {0} },
+	{ "layoutscroll",    layoutscroll,       .parse = parseplusminus },
+	{ "focusmon",        focusmon,           .parse = parseplusminus },
+	{ "tagmon",          tagmon,             .parse = parseplusminus },
+	{ "pushdown",        pushdown,           {0} },
+	{ "pushup",          pushup,             {0} },
+	{ "view",            view,               .parse = parsetag },
+	{ "toggleview",      toggleview,         .parse = parsetag },
+	{ "tag",             tag,                .parse = parsetag },
+	{ "toggletag",       toggletag,          .parse = parsetag },
+	{ "quit",            quit,               {0} },
 };
