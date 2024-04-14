@@ -66,7 +66,7 @@ enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
 enum { SchemeNorm, SchemeSel }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
-       NetWMWindowTypeDialog, NetClientList, NetDesktopNames, NetDesktopViewport, NetNumberOfDesktops, NetCurrentDesktop, NetWindowDesktop, NetCurrentLayout, NetLast }; /* EWMH atoms */
+       NetWMWindowTypeDialog, NetClientList, NetDesktopNames, NetDesktopViewport, NetNumberOfDesktops, NetCurrentDesktop, NetWindowDesktop, NetCurrentLayout, NetStrut, NetWMWindowTypeDock, NetLast }; /* EWMH atoms */
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
 
@@ -199,6 +199,7 @@ static void focusin(XEvent *e);
 static void focusmon(const Arg *arg);
 static void focusstack(const Arg *arg);
 static Atom getatomprop(Client *c, Atom prop);
+static Atom getwindowtype(Window c);
 static int getrootptr(int *x, int *y);
 static long getstate(Window w);
 static int gettextprop(Window w, Atom atom, char *text, unsigned int size);
@@ -235,7 +236,7 @@ static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
 static void layoutscroll(const Arg *arg);
 static void setinset(Monitor *m, Inset inset);
-static void updateinset(const Arg *arg);
+static void mapnotify(XEvent *e);
 static void setlayout(const Arg *arg);
 static void setmfact(const Arg *arg);
 static void setnumdesktops(void);
@@ -290,6 +291,7 @@ static void (*handler[LASTEvent]) (XEvent *) = {
 	[FocusIn] = focusin,
 	[MappingNotify] = mappingnotify,
 	[MapRequest] = maprequest,
+	[MapNotify] = mapnotify,
 	[MotionNotify] = motionnotify,
 	[PropertyNotify] = propertynotify,
 	[UnmapNotify] = unmapnotify
@@ -962,6 +964,22 @@ getatomprop(Client *c, Atom prop)
 	Atom da, atom = None;
 
 	if (XGetWindowProperty(dpy, c->win, prop, 0L, sizeof atom, False, XA_ATOM,
+		&da, &di, &dl, &dl, &p) == Success && p) {
+		atom = *(Atom *)p;
+		XFree(p);
+	}
+	return atom;
+}
+
+Atom
+getwindowtype(Window c)
+{
+	int di;
+	unsigned long dl;
+	unsigned char *p = NULL;
+	Atom da, atom = None;
+
+	if (XGetWindowProperty(dpy, c, netatom[NetWMWindowType], 0L, sizeof atom, False, XA_ATOM,
 		&da, &di, &dl, &dl, &p) == Success && p) {
 		atom = *(Atom *)p;
 		XFree(p);
@@ -1684,13 +1702,38 @@ setinset(Monitor *m, Inset inset)
 	arrange(m);
 }
 
-void
-updateinset(const Arg *arg)
-{
-	Inset *inset = (Inset *)arg->v;
+void mapnotify(XEvent *e){
+	XMapEvent *ev = &e->xmap;
 
-	for (Monitor *m = mons; m; m = m->next)
-		setinset(m, *inset);
+	Atom wtype = getwindowtype(ev->window);
+	if (wtype != netatom[NetWMWindowTypeDock]){
+		return;
+	}
+
+	int di;
+	unsigned long dl;
+	unsigned char *p = NULL;
+	long *p2 = NULL;
+	Atom da = None;
+
+	Inset inset = {
+		.x = 0,
+		.w = 0,
+		.y = 0,
+		.h = 0,
+	};
+	if (XGetWindowProperty(dpy, ev->window, netatom[NetStrut], 0L, 4L, False, XA_CARDINAL, &da, &di, &dl, &dl, &p) == Success && p) {
+		p2 = (long *)p;
+		inset.x = p2[0];
+		inset.w = p2[1];
+		inset.y = p2[2];
+		inset.h = p2[3];
+		XFree(p);
+	}
+	
+	for (Monitor *m = mons; m; m = m->next){
+		setinset(m, inset);
+	}
 }
 
 void
@@ -1764,6 +1807,8 @@ setup(void)
 	netatom[NetCurrentDesktop] = XInternAtom(dpy, "_NET_CURRENT_DESKTOP", False);
 	netatom[NetCurrentLayout] = XInternAtom(dpy, "_DWM_LAYOUT", False);
 	netatom[NetDesktopNames] = XInternAtom(dpy, "_NET_DESKTOP_NAMES", False);
+	netatom[NetStrut] = XInternAtom(dpy, "_NET_WM_STRUT", False);
+	netatom[NetWMWindowTypeDock] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
 	/* init cursors */
 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
 	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
@@ -2052,6 +2097,21 @@ unmapnotify(XEvent *e)
 			setclientstate(c, WithdrawnState);
 		else
 			unmanage(c, 0);
+	}
+
+	Atom wtype = getwindowtype(ev->window);
+	if (wtype != netatom[NetWMWindowTypeDock]){
+		return;
+	}
+
+	Inset inset = {
+		.x = 0,
+		.w = 0,
+		.y = 0,
+		.h = 0,
+	};
+	for (Monitor *m = mons; m; m = m->next){
+		setinset(m, inset);
 	}
 }
 
