@@ -137,5 +137,6 @@ static Command commands[] = {
 	{ "toggleview",      toggleview,         .parse = parsetag },
 	{ "tag",             tag,                .parse = parsetag },
 	{ "toggletag",       toggletag,          .parse = parsetag },
+	{ "refresh",         refresh_xresources,               {0} },
 	{ "quit",            quit,               {0} },
 };

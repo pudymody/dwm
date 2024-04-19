@@ -273,6 +273,7 @@ static void zoom(const Arg *arg);
 static void bstack(Monitor *m);
 static void bstack_reversed(Monitor *m);
 static void load_xresources(void);
+static void refresh_xresources();
 static void resource_load(XrmDatabase db, char *name, enum resource_type rtype, void *dst);
 
 /* variables */
@@ -2502,6 +2503,16 @@ load_xresources(void)
 	for (p = resources; p < resources + LENGTH(resources); p++)
 		resource_load(db, p->name, p->type, p->dst);
 	XCloseDisplay(display);
+}
+
+void
+refresh_xresources()
+{
+	load_xresources();
+	for (int i = 0; i < LENGTH(colors); i++)
+		scheme[i] = drw_scm_create(drw, colors[i], 3);
+	focus(NULL);
+	arrange(NULL);
 }
 
 int
