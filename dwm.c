@@ -276,6 +276,8 @@ static void load_xresources(void);
 static void refresh_xresources();
 static void resource_load(XrmDatabase db, char *name, enum resource_type rtype, void *dst);
 
+static void focusmaster(const Arg *arg);
+
 /* variables */
 static const char broken[] = "broken";
 static int screen;
@@ -2619,4 +2621,20 @@ bstack(Monitor *m) {
 			}
 		}
 	}
+}
+
+void
+focusmaster(const Arg *arg)
+{
+	Client *c;
+
+	if (selmon->nmaster < 1)
+		return;
+	if (!selmon->sel || (selmon->sel->isfullscreen && lockfullscreen))
+		return;
+
+	c = nexttiled(selmon->clients);
+
+	if (c)
+		focus(c);
 }
